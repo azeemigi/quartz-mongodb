@@ -29,38 +29,11 @@ import java.io.ObjectOutputStream;
 import java.net.UnknownHostException;
 import java.util.*;
 
+import  static com.mulesoft.quartz.mongo.utils.JobKeyBox.*;
+
 public class MongoDBJobStore implements JobStore {
-    protected final Logger log = LoggerFactory.getLogger(getClass());
-    
-    private static final String JOB_KEY_NAME = "keyName";
-    private static final String JOB_KEY_GROUP = "keyGroup";
-    private static final String JOB_KEY_INDEX = "keyIndex";
-    private static final String JOB_DESCRIPTION = "jobDescription";
-    private static final String JOB_CLASS = "jobClass";
-    private static final String TRIGGER_CALENDAR_NAME = "calendarName";
-    private static final String TRIGGER_DESCRIPTION = "description";
-    private static final String TRIGGER_END_TIME = "endTime";
-    private static final String TRIGGER_FINAL_FIRE_TIME = "finalFireTime";
-    private static final String TRIGGER_FIRE_INSTANCE_ID = "fireInstanceId";
-    private static final String TRIGGER_KEY_NAME = "keyName";
-    private static final String TRIGGER_KEY_GROUP = "keyGroup";
-    private static final String TRIGGER_KEY_INDEX = "keyIndex";
-    private static final String TRIGGER_MISFIRE_INSTRUCTION = "misfireInstruction";
-    private static final String TRIGGER_NEXT_FIRE_TIME = "nextFireTime";
-    private static final String TRIGGER_PREVIOUS_FIRE_TIME = "previousFireTime";
-    private static final String TRIGGER_PRIORITY = "priority";
-    private static final String TRIGGER_START_TIME = "startTime";
-    private static final String TRIGGER_JOB_ID = "jobId";
-    private static final String TRIGGER_CLASS = "class";
-    private static final String SIMPLE_TRIGGER_REPEAT_COUNT = "repeatCount";
-    private static final String SIMPLE_TRIGGER_REPEAT_INTERVAL = "repeatInterval";
-    private static final String SIMPLE_TRIGGER_TIMES_TRIGGERED = "timesTriggered";
-    private static final String CALENDAR_NAME = "name";
-    private static final String CALENDAR_SERIALIZED_OBJECT = "serializedObject";
-    private static final String LOCK_KEY_NAME = "keyName";
-    private static final String LOCK_KEY_GROUP = "keyGroup";
-    private static final String LOCK_INSTANCE_ID = "instanceId";
-    private static final String LOCK_TIME = "time";
+
+    protected final Logger logger = LoggerFactory.getLogger(getClass());
     
     private Mongo mongo;
     private String collectionPrefix = "quartz_";
@@ -163,7 +136,7 @@ public class MongoDBJobStore implements JobStore {
             JobPersistenceException {
         ObjectId jobId = storeJobInMongo(newJob, false);
         
-        log.debug("Storing job " + newJob.getKey() + " and trigger " + newTrigger.getKey());
+        logger.debug("Storing job " + newJob.getKey() + " and trigger " + newTrigger.getKey());
         storeTrigger(newTrigger, jobId, false);
     }
 
@@ -522,7 +495,7 @@ public class MongoDBJobStore implements JobStore {
     }
 
     public void resumeTrigger(TriggerKey triggerKey) throws JobPersistenceException {
-        log.debug("Resume trigger" + triggerKey);
+        logger.debug("Resume trigger" + triggerKey);
         throw new UnsupportedOperationException();
     }
 
@@ -555,8 +528,8 @@ public class MongoDBJobStore implements JobStore {
         BasicDBObject query = new BasicDBObject();
         query.put(TRIGGER_NEXT_FIRE_TIME, new BasicDBObject("$lte", new Date(noLaterThan)));
 
-        if (log.isDebugEnabled()) {
-            log.debug("Finding up to " + maxCount + " triggers which have time less than " + new Date(noLaterThan));
+        if (logger.isDebugEnabled()) {
+            logger.debug("Finding up to " + maxCount + " triggers which have time less than " + new Date(noLaterThan));
         }
         List<OperableTrigger> triggers = new ArrayList<OperableTrigger>();
         DBCursor cursor = triggerCollection.find(query);
@@ -565,8 +538,8 @@ public class MongoDBJobStore implements JobStore {
         sort.put(TRIGGER_NEXT_FIRE_TIME, Integer.valueOf(1));
         cursor.sort(sort);
         
-        if (log.isDebugEnabled()) {
-            log.debug("Found " + cursor.count() + " triggers which are eligible to be run.");
+        if (logger.isDebugEnabled()) {
+            logger.debug("Found " + cursor.count() + " triggers which are eligible to be run.");
         }
         
         while (cursor.hasNext() && maxCount > triggers.size()) {
@@ -582,8 +555,8 @@ public class MongoDBJobStore implements JobStore {
                 OperableTrigger trigger = toTrigger(dbObj);
 
                 if (trigger.getNextFireTime() == null) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Skipping trigger " + trigger.getKey() + " as it has no next fire time.");
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Skipping trigger " + trigger.getKey() + " as it has no next fire time.");
                     }
 
                     continue;
@@ -591,22 +564,22 @@ public class MongoDBJobStore implements JobStore {
 
                 // deal with misfires
                 if (applyMisfire(trigger) && trigger.getNextFireTime() == null) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Skipping trigger " + trigger.getKey() + " as it has no next fire time after the misfire was applied.");
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Skipping trigger " + trigger.getKey() + " as it has no next fire time after the misfire was applied.");
                     }
 
                     continue;
                 }
-                log.debug("Inserting lock for trigger " + trigger.getKey());
+                logger.debug("Inserting lock for trigger " + trigger.getKey());
                 locksCollection.insert(lock);
-                log.debug("Aquired trigger " + trigger.getKey());
+                logger.debug("Aquired trigger " + trigger.getKey());
                 triggers.add(trigger);
             } catch (DuplicateKey e) {
                 
                 OperableTrigger trigger = toTrigger(dbObj);
                 
                 // someone else acquired this lock. Move on.
-                log.debug("Failed to acquire trigger " + trigger.getKey() + " due to a lock");
+                logger.debug("Failed to acquire trigger " + trigger.getKey() + " due to a lock");
                 
                 lock = new BasicDBObject();
                 lock.put(LOCK_KEY_NAME, dbObj.get(TRIGGER_KEY_NAME));
@@ -617,13 +590,13 @@ public class MongoDBJobStore implements JobStore {
                 if (lockCursor.hasNext()) {
                     existingLock = lockCursor.next();
                 } else {
-                    log.error("Error retrieving expired lock from the database. Maybe it was deleted");
+                    logger.error("Error retrieving expired lock from the database. Maybe it was deleted");
                     return acquireNextTriggers(noLaterThan, maxCount, timeWindow);
                 }
                 
                 // support for trigger lock expirations
                 if (isTriggerLockExpired(existingLock)) {
-                    log.error("Lock for trigger "+trigger.getKey()+" is expired - removing lock and retrying trigger acquisition");
+                    logger.error("Lock for trigger " + trigger.getKey() + " is expired - removing lock and retrying trigger acquisition");
                     removeTriggerLock(trigger);
                     return acquireNextTriggers(noLaterThan, maxCount, timeWindow);
                 }
@@ -688,7 +661,7 @@ public class MongoDBJobStore implements JobStore {
         List<TriggerFiredResult> results = new ArrayList<TriggerFiredResult>();
         
         for (OperableTrigger trigger : triggers) {
-            log.debug("Fired trigger " + trigger.getKey());
+            logger.debug("Fired trigger " + trigger.getKey());
             Calendar cal = null;
             if (trigger.getCalendarName() != null) {
                 cal = retrieveCalendar(trigger.getCalendarName());
@@ -719,9 +692,9 @@ public class MongoDBJobStore implements JobStore {
 
     public void triggeredJobComplete(OperableTrigger trigger, 
                                      JobDetail jobDetail,
-                                     CompletedExecutionInstruction triggerInstCode) 
-        throws JobPersistenceException {
-        log.debug("Trigger completed " + trigger.getKey());
+                                     CompletedExecutionInstruction triggerInstCode)
+            throws JobPersistenceException {
+        logger.debug("Trigger completed " + trigger.getKey());
         // check for trigger deleted during execution...
         OperableTrigger trigger2 = retrieveTrigger(trigger.getKey());
         if (trigger2 != null) {
@@ -755,14 +728,14 @@ public class MongoDBJobStore implements JobStore {
     }
 
     protected void removeTriggerLock(OperableTrigger trigger) {
-        log.debug("Removing trigger lock " + trigger.getKey() + "."+instanceId);
+        logger.debug("Removing trigger lock " + trigger.getKey() + "." + instanceId);
         BasicDBObject lock = new BasicDBObject();
         lock.put(LOCK_KEY_NAME, trigger.getKey().getName());
         lock.put(LOCK_KEY_GROUP, trigger.getKey().getGroup());
         lock.put(LOCK_INSTANCE_ID, instanceId);
-        
+
         locksCollection.remove(lock);
-        log.debug("Trigger lock " + trigger.getKey() + "."+instanceId+" removed.");
+        logger.debug("Trigger lock " + trigger.getKey() + "." + instanceId + " removed.");
     }
 
     public void setInstanceId(String instanceId) {
