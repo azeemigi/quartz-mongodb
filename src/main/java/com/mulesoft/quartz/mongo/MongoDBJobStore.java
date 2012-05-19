@@ -58,7 +58,7 @@ public class MongoDBJobStore implements JobStore {
         if (addresses == null || addresses.length == 0) {
             throw new SchedulerConfigException("At least one MongoDB address must be specified.");
         }
-        
+
         MongoOptions options = new MongoOptions();
         options.safe = true; // need to do this to ensure we get DuplicateKey exceptions
         
@@ -217,13 +217,20 @@ public class MongoDBJobStore implements JobStore {
 
     public void storeJobsAndTriggers(Map<JobDetail, List<Trigger>> triggersAndJobs, boolean replace)
             throws ObjectAlreadyExistsException, JobPersistenceException {
-        throw new UnsupportedOperationException();
+        //TODO: We need to provide a way to persist job details and its associated triggers as a bulk operations
+        for (JobDetail jobDetail : triggersAndJobs.keySet()) {
+            storeJob(jobDetail, true);
+            for (Trigger trigger : triggersAndJobs.get(jobDetail)) {
+                storeTrigger((OperableTrigger) trigger, true);
+            }
+        }
     }
 
     public boolean removeJob(JobKey jobKey) throws JobPersistenceException {
         BasicDBObject keyObject = keyAsDBObject(jobKey);
         DBCursor find = jobCollection.find(keyObject);
-        while (find.hasNext()) {
+        //With the given jobkey there will be only one associated job
+        if (find.hasNext()) {
             DBObject jobObj = find.next();
             jobCollection.remove(keyObject);
             triggerCollection.remove(new BasicDBObject(TRIGGER_JOB_ID, jobObj.get("_id")));
@@ -278,8 +285,7 @@ public class MongoDBJobStore implements JobStore {
     }
 
     protected DBObject retrieveJobDBObject(JobKey jobKey) {
-        DBObject dbObject = jobCollection.findOne(keyAsDBObject(jobKey));
-        return dbObject;
+        return jobCollection.findOne(keyAsDBObject(jobKey));
     }
 
     public void storeTrigger(OperableTrigger newTrigger, boolean replaceExisting) throws ObjectAlreadyExistsException,
