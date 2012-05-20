@@ -37,4 +37,7 @@ public class JobKeyBox {
     public static final String LOCK_INSTANCE_ID = "instanceId";
     public static final String LOCK_TIME = "time";
 
+    public static final String TRIGGER_FIRE_STATE = "fireState";
+
+
 }
