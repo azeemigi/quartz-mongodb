@@ -261,28 +261,45 @@ public class MongoDBJobStore implements JobStore {
     public JobDetail retrieveJob(JobKey jobKey) throws JobPersistenceException {
         DBObject dbObject = retrieveJobDBObject(jobKey);
 
+        if (dbObject == null) {
+            throw new JobPersistenceException(String.format("There are no Job Details found for JobKey [%s]", jobKey));
+        }
+
         try {
             Class<Job> jobClass = (Class<Job>) loadHelper.getClassLoader().loadClass((String)dbObject.get(JOB_CLASS));
 
             JobBuilder builder = JobBuilder.newJob(jobClass)
                     .withIdentity((String)dbObject.get(JOB_KEY_NAME), (String)dbObject.get(JOB_KEY_GROUP))
-                    .withDescription((String)dbObject.get(JOB_KEY_NAME));
+                    .withDescription((String)dbObject.get(JOB_DESCRIPTION));
 
             JobDataMap jobData = new JobDataMap();
-            for (String key : dbObject.keySet()) {
-                if (!key.equals(JOB_KEY_NAME)
-                        && !key.equals(JOB_KEY_GROUP)
-                        && !key.equals(JOB_CLASS)
-                        && !key.equals(JOB_DESCRIPTION)
-                        && !key.equals("_id")) {
-                    jobData.put(key, dbObject.get(key));
-                }
-            }
+            dbObject.removeField(JOB_KEY_NAME);
+            dbObject.removeField(JOB_CLASS);
+            dbObject.removeField(JOB_DESCRIPTION);
+            dbObject.removeField(JOB_KEY_GROUP);
+            dbObject.removeField("_id");
+
+            Map<String, Object> stringObjectMap = convertToMap(dbObject.toMap());
+            jobData.putAll(stringObjectMap);
 
             return builder.usingJobData(jobData).build();
         } catch (ClassNotFoundException e) {
             throw new JobPersistenceException("Could not load job class " + dbObject.get(JOB_CLASS), e);
         }
+    }
+    
+    public Map<String, Object> convertToMap(Map<String, Object> mapObject) {
+        Map<String, Object> newMap = new HashMap<String, Object>();
+        for (Map.Entry<String, Object> entry : mapObject.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof BasicDBObject) {
+                newMap.put(key, convertToMap((Map<String, Object>) value));
+            } else {
+                newMap.put(key, value);
+            }
+        }
+        return newMap;
     }
 
     protected DBObject retrieveJobDBObject(JobKey jobKey) {
