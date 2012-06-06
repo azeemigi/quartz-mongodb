@@ -158,6 +158,8 @@ public class MongoDBJobStore implements JobStore {
         triggerDB.put(TRIGGER_START_TIME, newTrigger.getStartTime());
         triggerDB.put(TRIGGER_FIRE_STATE, TriggerState.NORMAL.toString());
 
+        triggerDB.put(JOB_DATA_MAP, newTrigger.getJobDataMap().getWrappedMap());
+
         if (newTrigger instanceof SimpleTrigger) {
             SimpleTrigger simple = (SimpleTrigger) newTrigger;
             triggerDB.put(SIMPLE_TRIGGER_REPEAT_COUNT, simple.getRepeatCount());
@@ -390,6 +392,18 @@ public class MongoDBJobStore implements JobStore {
                 simple.setTimesTriggered((Integer)timesTriggered);
             }
         }
+
+        JobDataMap jobData = new JobDataMap();
+        dbObject.removeField("_id");
+        dbObject.removeField(TRIGGER_CALENDAR_NAME);
+        dbObject.removeField(TRIGGER_CLASS);
+        dbObject.removeField(TRIGGER_DESCRIPTION);
+
+        Map<String, Object> stringObjectMap = convertToMap(dbObject.toMap());
+        jobData.putAll(stringObjectMap);
+
+        trigger.setJobDataMap(jobData);
+
         DBObject job = jobCollection.findOne(new BasicDBObject("_id", dbObject.get(TRIGGER_JOB_ID)));
         if (job != null) {
             trigger.setJobKey(new JobKey((String)job.get(JOB_KEY_NAME), (String)job.get(JOB_KEY_GROUP)));

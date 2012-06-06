@@ -12,6 +12,7 @@ public class JobKeyBox {
     public static final String JOB_KEY_INDEX = "keyIndex";
     public static final String JOB_DESCRIPTION = "jobDescription";
     public static final String JOB_CLASS = "jobClass";
+    public static final String JOB_DATA_MAP = "jobDataMap";
     public static final String TRIGGER_CALENDAR_NAME = "calendarName";
     public static final String TRIGGER_DESCRIPTION = "description";
     public static final String TRIGGER_END_TIME = "endTime";
