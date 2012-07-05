@@ -116,7 +116,7 @@ public class MongoDBJobStore implements JobStore {
     }
 
     public void shutdown() {
-	if (mongo != null)
+	if (mongo != null) {
             mongo.close();
     	}
     }
